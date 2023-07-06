@@ -1,0 +1,47 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+  branches:
+    include:
+    - main
+
+name: $(BuildDefinitionName)_$(SourceBranchName)_$(Date:yyyyMMdd)$(Rev:.r)
+
+jobs:
+- job: Terraform_Build
+  displayName: Terraform Validate
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - checkout: self  
+  - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
+    inputs:
+      terraformVersion: '0.14.5'
+      displayName: Install Terraform
+
+  - bash: sed -i 's/backend "gcs"/backend "local"/g' main.tf
+    workingDirectory: $(Build.Repository.LocalPath)/terraform
+    displayName: update to local backend
+
+  - bash: terraform init
+    workingDirectory: $(Build.Repository.LocalPath)/terraform
+    displayName: terraform init 
+
+  - bash: terraform validate
+    workingDirectory: $(Build.Repository.LocalPath)/terraform
+    displayName: terraform validate
+
+  - bash: sed -i 's/backend "local"/backend "gcs"/g' main.tf
+    workingDirectory: $(Build.Repository.LocalPath)/terraform
+    displayName: update back to gcs backend
+
+  - bash: rm -rf $(Build.Repository.LocalPath)/terraform/.terraform && rm -rf $(Build.Repository.LocalPath)/terraform/.terraform
+    displayName: remove terraform plugin cache
+
+  - task: PublishBuildArtifacts@1
+    inputs:
+      pathtoPublish: '$(Build.Repository.LocalPath)'
+      artifactName: drop
